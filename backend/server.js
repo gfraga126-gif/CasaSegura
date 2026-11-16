@@ -3,25 +3,6 @@ const express = require("express");
 
 const app = express();
 const PORT = 3000;
-const HOST = "127.0.0.1";
-
-app.use(express.json());
-
-// Tela inicial da API
-app.get("/", (req, res) => {
-    res.json({
-        projeto: "CasaSegura",
-        status: "online",
-        modo: "demonstracao"
-    });
-const express = require("express");
-
-const app = express();
-const PORT = 3000;
-
-// Somente para desenvolvimento local.
-// Não expor esta API à internet.
-const HOST = "0.0.0.0";
 
 app.use(express.json({ limit: "10kb" }));
 
@@ -47,15 +28,15 @@ app.post("/api/sos", (req, res) => {
     const evento = {
         id: Date.now().toString(),
         tipo: "SOS_DEMONSTRACAO",
-        data: new Date().toISOString(),
-        notificacaoEnviada: false
+        notificacaoEnviada: false,
+        horario: new Date().toISOString()
     };
 
-    console.log("SOS de demonstracao:", evento);
+    console.log("SOS demonstrativo:", evento);
 
     res.json({
         sucesso: true,
-        mensagem: "SOS registrado somente em demonstracao",
+        mensagem: "SOS registrado apenas em demonstracao",
         notificacaoEnviada: false,
         evento
     });
@@ -67,12 +48,8 @@ app.use((req, res) => {
     });
 });
 
-app.listen(PORT, HOST, () => {
-    console.log("==============================");
-    console.log("CASA SEGURA - BACK-END");
-    console.log("==============================");
-    console.log(`Servidor na porta ${PORT}`);
-    console.log("Modo: desenvolvimento local");
-    console.log("ESP32: desconectado");
-    console.log("==============================");
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(
+        `CasaSegura funcionando na porta ${PORT}`
+    );
 });
