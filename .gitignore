@@ -17,3 +17,5 @@ local.properties
 *.jks
 *.keystore
 .env
+
+/backend/.casa-segura-data.json*

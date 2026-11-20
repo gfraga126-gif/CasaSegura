@@ -2,7 +2,7 @@
 const express = require("express");
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json({ limit: "10kb" }));
 
@@ -41,6 +41,8 @@ app.post("/api/sos", (req, res) => {
         evento
     });
 });
+
+require("./notificacoes")(app);
 
 app.use((req, res) => {
     res.status(404).json({

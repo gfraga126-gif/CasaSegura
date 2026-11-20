@@ -5,12 +5,9 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
-import android.os.CancellationSignal
-import android.os.Build
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -25,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,44 +34,108 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import kotlin.math.roundToInt
 
 // CORES DO APLICATIVO
-private val AzulEscuro = Color(0xFF103B70)
-private val Azul = Color(0xFF1769C2)
-private val AzulClaro = Color(0xFF38A5ED)
-private val Verde = Color(0xFF009B80)
-private val Vermelho = Color(0xFFD32F2F)
-private val Fundo = Color(0xFFF0F6FD)
-private val TextoEscuro = Color(0xFF172D49)
+private val AzulEscuro = Color(0xFF171936)
+private val Azul = Color(0xFF40369E)
+private val AzulClaro = Color(0xFF5848C2)
+private val Verde = Color(0xFF087667)
+private val Vermelho = Color(0xFFB72137)
+private val Fundo = Color(0xFFF5F3FC)
+private val TextoEscuro = Color(0xFF24203B)
 
 // Servidor local do computador, acessado pelo emulador
 private const val API_URL = "http://10.0.2.2:3000"
 
-private val dispositivos = listOf(
-    "Porta principal",
-    "Portão",
-    "Janela da sala",
-    "Janela do quarto 1",
-    "Janela do quarto 2",
-    "Cortina"
+private enum class AcaoDispositivo(
+    val ativar: String,
+    val desativar: String,
+    val ativo: String,
+    val inativo: String
+) {
+    ABERTURA("Abrir", "Fechar", "Aberto", "Fechado"),
+    ENERGIA("Ligar", "Desligar", "Ligado", "Desligado"),
+    CORTINA("Subir", "Descer", "Recolhida", "Estendida")
+}
+
+private enum class AjusteDispositivo(val inicial: Int) {
+    TEMPERATURA(24),
+    INTENSIDADE(100),
+    ABERTURA_JANELA(0)
+}
+
+private data class Dispositivo(
+    val nome: String,
+    val icone: String,
+    val acao: AcaoDispositivo = AcaoDispositivo.ENERGIA,
+    val ajuste: AjusteDispositivo? = null
 )
 
-private val icones = listOf(
-    "🚪", "🏡", "🪟", "🪟", "🪟", "🪟"
+private const val AR_SALA = "Ar-condicionado da sala"
+private const val LUZ_EXTERNA = "Iluminação externa"
+private const val LUZ_SALA = "Luz da sala"
+private const val LUZ_COZINHA = "Luz da cozinha"
+private const val LUZ_GARAGEM = "Luz da garagem"
+private const val LUZ_QUARTO_1 = "Luz do quarto 1"
+
+private val dispositivosPorSecao = linkedMapOf(
+    "PORTAS, JANELAS E CORTINA" to listOf(
+        Dispositivo("Porta principal", "🚪", AcaoDispositivo.ABERTURA),
+        Dispositivo("Portão", "🏡", AcaoDispositivo.ABERTURA),
+        Dispositivo("Janela da sala", "🪟", AcaoDispositivo.ABERTURA, AjusteDispositivo.ABERTURA_JANELA),
+        Dispositivo("Janela do quarto 1", "🪟", AcaoDispositivo.ABERTURA, AjusteDispositivo.ABERTURA_JANELA),
+        Dispositivo("Janela do quarto 2", "🪟", AcaoDispositivo.ABERTURA, AjusteDispositivo.ABERTURA_JANELA),
+        Dispositivo("Cortina", "🪟", AcaoDispositivo.CORTINA)
+    ),
+    "AR-CONDICIONADO" to listOf(
+        Dispositivo("Ar-condicionado do quarto 1", "❄️", ajuste = AjusteDispositivo.TEMPERATURA),
+        Dispositivo("Ar-condicionado do quarto 2", "❄️", ajuste = AjusteDispositivo.TEMPERATURA),
+        Dispositivo(AR_SALA, "❄️", ajuste = AjusteDispositivo.TEMPERATURA)
+    ),
+    "ILUMINAÇÃO" to listOf(
+        Dispositivo(LUZ_EXTERNA, "💡", ajuste = AjusteDispositivo.INTENSIDADE),
+        Dispositivo(LUZ_QUARTO_1, "💡", ajuste = AjusteDispositivo.INTENSIDADE),
+        Dispositivo("Luz do quarto 2", "💡", ajuste = AjusteDispositivo.INTENSIDADE),
+        Dispositivo(LUZ_SALA, "💡", ajuste = AjusteDispositivo.INTENSIDADE),
+        Dispositivo(LUZ_COZINHA, "💡", ajuste = AjusteDispositivo.INTENSIDADE),
+        Dispositivo(LUZ_GARAGEM, "💡", ajuste = AjusteDispositivo.INTENSIDADE)
+    )
 )
+
+private val dispositivosDaCasa = dispositivosPorSecao.values.flatten()
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            MaterialTheme(
+                colorScheme = lightColorScheme(
+                    primary = Azul,
+                    primaryContainer = Color(0xFFEAE5FF),
+                    onPrimaryContainer = TextoEscuro,
+                    secondary = Verde,
+                    secondaryContainer = Color(0xFFD9F2E9),
+                    onSecondaryContainer = Color(0xFF164B43),
+                    surface = Color.White,
+                    onSurface = TextoEscuro,
+                    surfaceVariant = Fundo,
+                    onSurfaceVariant = Color(0xFF51496A),
+                    error = Vermelho
+                )
+            ) {
                 CasaSeguraApp()
             }
         }
@@ -81,12 +143,12 @@ class MainActivity : ComponentActivity() {
 }
 
 // CONSULTA AO SERVIDOR
-private suspend fun consultarServidor(): String =
+private suspend fun consultarServidor(endereco: String): String =
     withContext(Dispatchers.IO) {
         var conexao: HttpURLConnection? = null
 
         try {
-            conexao = URL("$API_URL/api/status")
+            conexao = URL("$endereco/api/status")
                 .openConnection() as HttpURLConnection
 
             conexao.requestMethod = "GET"
@@ -119,8 +181,27 @@ private suspend fun consultarServidor(): String =
 fun CasaSeguraApp() {
     val contexto = LocalContext.current
     val escopo = rememberCoroutineScope()
+    val acesso = remember(contexto) { AcessoCasa.obter(contexto) }
+    val conta by acesso.sessao.collectAsState()
+    val ciclo = LocalLifecycleOwner.current.lifecycle
+    var modoLocal by rememberSaveable { mutableStateOf(false) }
+    var envioRemoto by remember { mutableStateOf<Job?>(null) }
 
-    var tela by remember { mutableStateOf("inicio") }
+    LaunchedEffect(ciclo, conta?.token) {
+        if (conta == null) return@LaunchedEffect
+        modoLocal = false
+        acesso.agendarSincronizacao()
+        ciclo.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                acesso.sincronizar()
+                delay(5_000)
+            }
+        }
+    }
+
+    var tela by rememberSaveable { mutableStateOf("inicio") }
+    var origemLembretes by rememberSaveable { mutableStateOf("morador") }
+    if (conta == null && tela == "vinculo") LaunchedEffect(Unit) { tela = "inicio" }
     var vozAtivada by remember { mutableStateOf(true) }
     var vozPronta by remember { mutableStateOf(false) }
     var mecanismoVoz by remember {
@@ -130,11 +211,18 @@ fun CasaSeguraApp() {
     var sosSimulado by remember { mutableStateOf(false) }
     var confirmarSamu by remember { mutableStateOf(false) }
 
-    val estados = remember {
-        mutableStateListOf(
-            false, false, false,
-            false, false, false
-        )
+    val estados = remember { mutableStateMapOf<Dispositivo, Boolean>() }
+    val ajustes = remember { mutableStateMapOf<Dispositivo, Int>() }
+    var solarSimulada by rememberSaveable { mutableStateOf(false) }
+    var confirmarSaida by rememberSaveable { mutableStateOf(false) }
+    val historico = remember(contexto) { HistoricoCasa(contexto) }
+    var ultimaRotina by rememberSaveable { mutableStateOf<String?>(null) }
+
+    fun registrarAcao(descricao: String) {
+        historico.registrar(descricao)
+        if (acesso.registrar(descricao) && envioRemoto?.isActive != true) {
+            envioRemoto = escopo.launch { acesso.sincronizar() }
+        }
     }
 
     var servidorStatus by remember {
@@ -160,9 +248,7 @@ fun CasaSeguraApp() {
         mutableStateOf("")
     }
 
-    val cancelamentoGps = remember {
-        mutableStateOf<CancellationSignal?>(null)
-    }
+    var buscaGps by remember { mutableStateOf<Job?>(null) }
 
     // VOZ
     DisposableEffect(contexto) {
@@ -193,12 +279,6 @@ fun CasaSeguraApp() {
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            cancelamentoGps.value?.cancel()
-        }
-    }
-
     fun falar(mensagem: String) {
         if (vozAtivada && vozPronta) {
             mecanismoVoz?.speak(
@@ -210,125 +290,118 @@ fun CasaSeguraApp() {
         }
     }
 
+    fun executarRotina(rotina: RotinaCasa) {
+        dispositivosDaCasa.forEach { dispositivo ->
+            val nome = dispositivo.nome
+            val ajuste = dispositivo.ajuste
+            when (rotina) {
+                RotinaCasa.BOA_NOITE -> when {
+                    nome == LUZ_SALA || nome == LUZ_COZINHA -> estados[dispositivo] = false
+                    ajuste == AjusteDispositivo.ABERTURA_JANELA -> ajustes[dispositivo] = 0
+                    dispositivo.acao == AcaoDispositivo.CORTINA -> estados[dispositivo] = false
+                    nome == LUZ_QUARTO_1 -> {
+                        estados[dispositivo] = true
+                        ajustes[dispositivo] = 20
+                    }
+                    else -> Unit
+                }
+                RotinaCasa.CHEGUEI -> {
+                    if (nome == LUZ_GARAGEM || nome == LUZ_SALA || nome == AR_SALA) {
+                        estados[dispositivo] = true
+                    }
+                }
+                RotinaCasa.SAIR -> when {
+                    ajuste == AjusteDispositivo.ABERTURA_JANELA -> ajustes[dispositivo] = 0
+                    ajuste == AjusteDispositivo.TEMPERATURA -> estados[dispositivo] = false
+                    ajuste == AjusteDispositivo.INTENSIDADE && nome != LUZ_EXTERNA ->
+                        estados[dispositivo] = false
+                    else -> Unit
+                }
+            }
+        }
+        val mensagem = "Rotina ${rotina.titulo} executada."
+        ultimaRotina = mensagem
+        registrarAcao(mensagem)
+        falar(mensagem)
+    }
+
     fun verificarServidor() {
         consultando = true
         servidorStatus = "CONSULTANDO..."
 
         escopo.launch {
-            servidorStatus = consultarServidor()
+            servidorStatus = consultarServidor(conta?.servidor ?: API_URL)
             consultando = false
         }
     }
 
     // GPS
+    fun temLocalizacaoPrecisa() = ContextCompat.checkSelfPermission(
+        contexto, Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+
     fun atualizarGps() {
-        val fina = ContextCompat.checkSelfPermission(
-            contexto,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
+        if (consultandoGps) return
+        latitude = null
+        longitude = null
+        mensagemMapa = ""
 
-        val aproximada = ContextCompat.checkSelfPermission(
-            contexto,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (!fina && !aproximada) {
-            localizacaoTexto = "Permissão de localização não concedida"
+        if (!temLocalizacaoPrecisa()) {
+            localizacaoTexto = "Autorize a localização precisa do CasaSegura nas permissões do Android."
             return
         }
 
-        try {
-            val gerenciador = contexto.getSystemService(
-                Context.LOCATION_SERVICE
-            ) as LocationManager
+        val gerenciador = contexto.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        if (!gerenciador.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            localizacaoTexto = "Ative a localização do aparelho para usar o GPS."
+            return
+        }
 
-            val provedor = when {
-                fina && gerenciador.isProviderEnabled(
-                    LocationManager.GPS_PROVIDER
-                ) -> LocationManager.GPS_PROVIDER
-
-                gerenciador.isProviderEnabled(
-                    LocationManager.NETWORK_PROVIDER
-                ) -> LocationManager.NETWORK_PROVIDER
-
-                else -> null
-            }
-
-            if (provedor == null) {
-                localizacaoTexto = "Ative a localização do aparelho."
-                return
-            }
-
-            cancelamentoGps.value?.cancel()
-            val sinal = CancellationSignal()
-            cancelamentoGps.value = sinal
-
-            consultandoGps = true
-            latitude = null
-            longitude = null
-            mensagemMapa = ""
-            localizacaoTexto = "Buscando localização..."
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                gerenciador.getCurrentLocation(
-                    provedor,
-                    sinal,
-                    ContextCompat.getMainExecutor(contexto)
-                ) { local: Location? ->
-                    consultandoGps = false
-                    cancelamentoGps.value = null
-
-                    if (local != null) {
-                        latitude = local.latitude
-                        longitude = local.longitude
-                        localizacaoTexto =
-                            "Latitude: ${local.latitude}\n" +
-                                    "Longitude: ${local.longitude}\n" +
-                                    "Precisão estimada: ${local.accuracy.toInt()} metros"
-                    } else {
-                        localizacaoTexto =
-                            "Localização indisponível. Tente novamente."
+        consultandoGps = true
+        localizacaoTexto = "Buscando a melhor leitura do GPS…"
+        buscaGps = escopo.launch {
+            try {
+                val local = buscarMelhorGps(gerenciador)
+                if (local == null) {
+                    localizacaoTexto = "Sem sinal de GPS. Tente em um local aberto ou simule um ponto no emulador."
+                } else {
+                    latitude = local.latitude
+                    longitude = local.longitude
+                    val precisao = kotlin.math.ceil(local.accuracy.toDouble()).toInt()
+                    localizacaoTexto = String.format(
+                        Locale.forLanguageTag("pt-BR"),
+                        "Latitude: %.6f\nLongitude: %.6f\nRaio de precisão estimado: %d m",
+                        local.latitude,
+                        local.longitude,
+                        precisao
+                    )
+                    if (precisao > 15) {
+                        localizacaoTexto += "\nPrecisão reduzida. Tente novamente em um local aberto."
                     }
                 }
-            } else {
+            } catch (_: SecurityException) {
+                localizacaoTexto = "A localização precisa foi bloqueada pelo Android."
+            } catch (_: IllegalArgumentException) {
+                localizacaoTexto = "O GPS está indisponível neste aparelho."
+            } finally {
                 consultandoGps = false
-                localizacaoTexto =
-                    "Esta consulta GPS requer Android 11 ou superior."
             }
-        } catch (e: Exception) {
-            consultandoGps = false
-            localizacaoTexto = "Erro ao consultar GPS."
         }
     }
 
     val pedirPermissao = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { resultado ->
-        val autorizado =
-            resultado[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                    resultado[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-
-        if (autorizado) {
-            atualizarGps()
-        } else {
-            localizacaoTexto = "Permissão de localização recusada"
-        }
+    ) {
+        atualizarGps()
     }
 
     fun solicitarGps() {
-        val fina = ContextCompat.checkSelfPermission(
-            contexto,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        val aproximada = ContextCompat.checkSelfPermission(
-            contexto,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (fina || aproximada) {
+        if (temLocalizacaoPrecisa()) {
             atualizarGps()
         } else {
+            latitude = null
+            longitude = null
+            mensagemMapa = ""
             pedirPermissao.launch(
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -365,9 +438,29 @@ fun CasaSeguraApp() {
         }
     }
 
-    BackHandler(enabled = tela != "inicio") {
+    LaunchedEffect(tela) {
+        if (tela != "tutor" && consultandoGps) {
+            buscaGps?.cancel()
+            localizacaoTexto = "Consulta de GPS cancelada."
+        }
+    }
+
+    fun abrirLembretes() {
+        origemLembretes = tela
+        tela = "lembretes"
+    }
+
+    fun voltar() {
         mecanismoVoz?.stop()
-        tela = "inicio"
+        tela = when (tela) {
+            "recursos" -> "morador"
+            "lembretes" -> origemLembretes
+            else -> "inicio"
+        }
+    }
+
+    BackHandler(enabled = (conta != null || modoLocal) && tela != "inicio") {
+        voltar()
     }
 
     Column(
@@ -379,7 +472,12 @@ fun CasaSeguraApp() {
         // CABEÇALHO
         CabecalhoCasaSegura()
 
-        when (tela) {
+        if (conta == null && !modoLocal) {
+            TelaEntradaCasa(acesso) {
+                tela = "inicio"
+                modoLocal = true
+            }
+        } else when (tela) {
             "inicio" -> {
                 Box(Modifier.weight(1f)) {
                     ConteudoRolavel {
@@ -397,6 +495,12 @@ fun CasaSeguraApp() {
                             color = Color.DarkGray,
                             textAlign = TextAlign.Center
                         )
+
+                        TextButton(onClick = {
+                            if (conta == null) modoLocal = false else tela = "vinculo"
+                        }) {
+                            Text(if (conta == null) "Entrar ou cadastrar conta" else "Minha conta e avisos entre celulares")
+                        }
 
                         Spacer(Modifier.height(24.dp))
 
@@ -508,7 +612,7 @@ fun CasaSeguraApp() {
                                 modifier = Modifier.padding(18.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("🔊", fontSize = 30.sp)
+                                Text("🔊", fontSize = 44.sp)
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(
@@ -529,41 +633,103 @@ fun CasaSeguraApp() {
                                     checked = vozAtivada,
                                     onCheckedChange = {
                                         vozAtivada = it
+                                        registrarAcao(if (it) "Assistente de voz ativado." else "Assistente de voz desativado.")
                                         if (!it) mecanismoVoz?.stop()
                                     }
                                 )
                             }
                         }
 
+                        Spacer(Modifier.height(16.dp))
+
+                        Button(
+                            onClick = { tela = "recursos" },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Azul)
+                        ) {
+                            IconeAcao("📱", "RECURSOS DO APARELHO")
+                        }
+
                         Spacer(Modifier.height(20.dp))
 
-                        Text(
-                            "DISPOSITIVOS DA CASA",
-                            fontWeight = FontWeight.Bold,
-                            color = TextoEscuro
+                        Button(
+                            onClick = ::abrirLembretes,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Verde)
+                        ) {
+                            IconeAcao("🔔", "LEMBRETES DA CASA")
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        RotinasDaCasa(ultimaRotina) { rotina ->
+                            if (rotina == RotinaCasa.SAIR) confirmarSaida = true
+                            else executarRotina(rotina)
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        ControleGeracaoSolar(
+                            simulando = solarSimulada,
+                            alternar = {
+                                solarSimulada = !solarSimulada
+                                registrarAcao(
+                                    if (solarSimulada) "Simulação solar iniciada."
+                                    else "Simulação solar encerrada."
+                                )
+                                falar(
+                                    if (solarSimulada) "Geração solar simulada: 2,4 quilowatts."
+                                    else "Simulação de geração solar encerrada."
+                                )
+                            }
                         )
 
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(20.dp))
 
-                        dispositivos.forEachIndexed { indice, nome ->
-                            ControleAcessivel(
-                                icone = icones[indice],
-                                nome = nome,
-                                aberto = estados[indice],
-                                ouvir = {
-                                    falar(
-                                        "Este controle permite abrir ou fechar $nome."
-                                    )
-                                },
-                                acionar = {
-                                    estados[indice] = !estados[indice]
-                                    val comando =
-                                        if (estados[indice]) "Abrir" else "Fechar"
-                                    falar(
-                                        "$comando $nome. Controle demonstrativo."
-                                    )
-                                }
-                            )
+                        dispositivosPorSecao.forEach { (secao, dispositivos) ->
+                            Text(secao, fontWeight = FontWeight.Bold, color = TextoEscuro)
+                            Spacer(Modifier.height(12.dp))
+
+                            dispositivos.forEach { dispositivo ->
+                                val ajuste = dispositivo.ajuste
+                                val valor = ajustes[dispositivo] ?: ajuste?.inicial
+                                val janela = ajuste == AjusteDispositivo.ABERTURA_JANELA
+                                val ativo = if (janela) (valor ?: 0) > 0 else estados[dispositivo] == true
+                                val acao = dispositivo.acao
+                                ControleAcessivel(
+                                    dispositivo = dispositivo,
+                                    ativo = ativo,
+                                    valorAjuste = valor,
+                                    ajustar = { ajustes[dispositivo] = it },
+                                    registrarAjuste = { novoValor ->
+                                        val descricao = when (ajuste) {
+                                            AjusteDispositivo.TEMPERATURA -> "temperatura de $novoValor °C"
+                                            AjusteDispositivo.INTENSIDADE -> "brilho de $novoValor%"
+                                            AjusteDispositivo.ABERTURA_JANELA -> "abertura de $novoValor%"
+                                            null -> null
+                                        }
+                                        if (descricao != null) {
+                                            registrarAcao("${dispositivo.nome}: $descricao.")
+                                        }
+                                    },
+                                    ouvir = {
+                                        falar(
+                                            "Este controle permite ${acao.ativar.lowercase()} ou " +
+                                                "${acao.desativar.lowercase()}. ${dispositivo.nome}."
+                                        )
+                                    },
+                                    acionar = { novoEstado ->
+                                        if (janela) {
+                                            ajustes[dispositivo] = if (novoEstado) 100 else 0
+                                        } else {
+                                            estados[dispositivo] = novoEstado
+                                        }
+                                        val comando = if (novoEstado) acao.ativar else acao.desativar
+                                        registrarAcao("${dispositivo.nome}: $comando.")
+                                        falar("$comando. ${dispositivo.nome}. Controle demonstrativo.")
+                                    }
+                                )
+                            }
                         }
 
                         Spacer(Modifier.height(10.dp))
@@ -591,10 +757,7 @@ fun CasaSeguraApp() {
                                 containerColor = Verde
                             )
                         ) {
-                            Text(
-                                "🔊 OUVIR INSTRUÇÕES DE EMERGÊNCIA",
-                                textAlign = TextAlign.Center
-                            )
+                            IconeAcao("🔊", "OUVIR INSTRUÇÕES DE EMERGÊNCIA")
                         }
 
                         Spacer(Modifier.height(12.dp))
@@ -603,18 +766,13 @@ fun CasaSeguraApp() {
                             onClick = { confirmarSamu = true },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(82.dp),
+                                .heightIn(min = 82.dp),
                             shape = RoundedCornerShape(18.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Vermelho
                             )
                         ) {
-                            Text(
-                                "☎ EMERGÊNCIA GRAVE\nLIGAR SAMU 192",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
+                            IconeAcao("☎", "EMERGÊNCIA GRAVE\nLIGAR SAMU 192")
                         }
 
                         Spacer(Modifier.height(12.dp))
@@ -631,34 +789,50 @@ fun CasaSeguraApp() {
                 Button(
                     onClick = {
                         sosSimulado = true
+                        registrarAcao("SOS demonstrativo acionado.")
                         falar(
-                            "Pedido de ajuda registrado em demonstração. " +
-                                    "Nenhuma notificação real foi enviada."
+                            "Pedido de ajuda registrado em demonstração."
                         )
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 14.dp)
-                        .height(76.dp),
+                        .heightIn(min = 76.dp),
                     shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Vermelho
                     )
                 ) {
-                    Text(
-                        "🆘 SOS — PRECISO DE AJUDA",
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    IconeAcao("🆘", "SOS — PRECISO DE AJUDA")
                 }
 
                 Text(
-                    "SOS DEMONSTRATIVO — não envia alertas",
+                    "SOS DEMONSTRATIVO",
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center,
                     fontSize = 11.sp,
                     color = Color.DarkGray
                 )
+            }
+
+            "recursos" -> {
+                Box(Modifier.weight(1f)) {
+                    RecursosAparelho(::registrarAcao)
+                }
+            }
+
+            "lembretes" -> {
+                Box(Modifier.weight(1f)) {
+                    TelaLembretes { descricao ->
+                        if (origemLembretes == "morador") registrarAcao(descricao)
+                    }
+                }
+            }
+
+            "vinculo" -> {
+                conta?.let { atual ->
+                    Box(Modifier.weight(1f)) { TelaVinculoCasa(acesso, atual) }
+                }
             }
 
             "tutor" -> {
@@ -725,7 +899,7 @@ fun CasaSeguraApp() {
                         ) {
                             Column(Modifier.padding(18.dp)) {
                                 Text(
-                                    "📍 LOCALIZAÇÃO DO APARELHO",
+                                    "📍 LOCALIZAÇÃO POR GPS",
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TextoEscuro
@@ -791,7 +965,7 @@ fun CasaSeguraApp() {
                             CartaoInformacao(
                                 "🆘 SOS SIMULADO",
                                 "Pedido registrado nesta sessão. " +
-                                        "Nenhuma notificação real foi enviada."
+                                        "Evento de demonstração."
                             )
                         }
 
@@ -810,20 +984,36 @@ fun CasaSeguraApp() {
                             "Sem dados reais"
                         )
 
-                        CartaoInformacao(
-                            "🔔 Notificações",
-                            "Ainda não configuradas"
-                        )
+                        Button(
+                            onClick = ::abrirLembretes,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Verde)
+                        ) {
+                            IconeAcao("🔔", "CONFIGURAR LEMBRETES")
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        if (conta != null) {
+                            OutlinedButton(
+                                onClick = { tela = "vinculo" },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)
+                            ) {
+                                IconeAcao("🔔", "AVISOS DO OUTRO CELULAR")
+                            }
+                            Spacer(Modifier.height(12.dp))
+                        }
+
+                        HistoricoDaCasa(historico.eventos)
                     }
                 }
             }
         }
 
-        if (tela != "inicio") {
+        if ((conta != null || modoLocal) && tela != "inicio") {
             OutlinedButton(
                 onClick = {
-                    mecanismoVoz?.stop()
-                    tela = "inicio"
+                    voltar()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -832,11 +1022,36 @@ fun CasaSeguraApp() {
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Text(
-                    "← VOLTAR À TELA INICIAL",
+                    when {
+                        tela == "lembretes" && origemLembretes == "tutor" -> "← VOLTAR À CENTRAL DO TUTOR"
+                        tela == "recursos" || tela == "lembretes" -> "← VOLTAR À MINHA CASA"
+                        else -> "← VOLTAR À TELA INICIAL"
+                    },
                     fontWeight = FontWeight.Bold
                 )
             }
         }
+    }
+
+    if (confirmarSaida) {
+        AlertDialog(
+            onDismissRequest = { confirmarSaida = false },
+            title = { Text("Executar Sair de casa?") },
+            text = { Text(RotinaCasa.SAIR.descricao) },
+            confirmButton = {
+                Button(onClick = {
+                    confirmarSaida = false
+                    executarRotina(RotinaCasa.SAIR)
+                }) {
+                    Text("EXECUTAR ROTINA")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmarSaida = false }) {
+                    Text("CANCELAR")
+                }
+            }
+        )
     }
 
     if (confirmarSamu) {
@@ -860,6 +1075,7 @@ fun CasaSeguraApp() {
                                     Uri.parse("tel:192")
                                 )
                             )
+                            registrarAcao("Discador do SAMU aberto.")
                         } catch (e: Exception) {
                             falar("Não foi possível abrir o discador")
                         }
@@ -1031,14 +1247,39 @@ fun TituloSecao(
     }
 }
 
+@Composable
+private fun ControleGeracaoSolar(simulando: Boolean, alternar: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            IconeAcao("☀️", "Placas solares")
+            Text(
+                if (simulando) "Potência simulada: 2,4 kW" else "Simulação desligada",
+                fontSize = 19.sp,
+                color = TextoEscuro
+            )
+            BotaoDispositivo(
+                if (simulando) "ENCERRAR SIMULAÇÃO" else "SIMULAR GERAÇÃO",
+                if (simulando) Verde else Azul,
+                acionar = alternar
+            )
+        }
+    }
+}
+
 // CONTROLE DOS DISPOSITIVOS
 @Composable
-fun ControleAcessivel(
-    icone: String,
-    nome: String,
-    aberto: Boolean,
+private fun ControleAcessivel(
+    dispositivo: Dispositivo,
+    ativo: Boolean,
+    valorAjuste: Int?,
+    ajustar: (Int) -> Unit,
+    registrarAjuste: (Int) -> Unit,
     ouvir: () -> Unit,
-    acionar: () -> Unit
+    acionar: (Boolean) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -1053,22 +1294,27 @@ fun ControleAcessivel(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(icone, fontSize = 30.sp)
+                Text(dispositivo.icone, fontSize = 48.sp)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        nome,
+                        dispositivo.nome,
                         fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextoEscuro
                     )
                     Text(
-                        if (aberto)
-                            "Aberto (simulado)"
-                        else
-                            "Fechado (simulado)",
+                        if (dispositivo.ajuste == AjusteDispositivo.ABERTURA_JANELA) {
+                            when (valorAjuste) {
+                                0 -> "Fechada (simulado)"
+                                100 -> "Aberta (simulado)"
+                                else -> "Parcialmente aberta (simulado)"
+                            }
+                        } else {
+                            "${if (ativo) dispositivo.acao.ativo else dispositivo.acao.inativo} (simulado)"
+                        },
                         fontSize = 13.sp,
-                        color = if (aberto) Verde else Color.Gray
+                        color = if (ativo) Verde else Color.Gray
                     )
                 }
             }
@@ -1079,32 +1325,118 @@ fun ControleAcessivel(
                 onClick = ouvir,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp),
+                    .heightIn(min = 56.dp),
                 shape = RoundedCornerShape(14.dp)
             ) {
-                Text("🔊 OUVIR FUNÇÃO")
+                IconeAcao("🔊", "OUVIR FUNÇÃO")
             }
 
             Spacer(Modifier.height(8.dp))
 
-            Button(
-                onClick = acionar,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(62.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (aberto) Verde else Azul
-                )
-            ) {
-                Text(
-                    if (aberto) "FECHAR" else "ABRIR",
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            if (dispositivo.acao == AcaoDispositivo.CORTINA) {
+                BotaoDispositivo("↑ SUBIR", Azul, enabled = !ativo) { acionar(true) }
+                Spacer(Modifier.height(8.dp))
+                BotaoDispositivo("↓ DESCER", Azul, enabled = ativo) { acionar(false) }
+            } else {
+                val acao = dispositivo.acao
+                val comando = if (ativo) acao.desativar else acao.ativar
+                BotaoDispositivo(comando.uppercase(), if (ativo) Verde else Azul) {
+                    acionar(!ativo)
+                }
+            }
+
+            if (valorAjuste != null) {
+                Spacer(Modifier.height(16.dp))
+                when (dispositivo.ajuste) {
+                    AjusteDispositivo.TEMPERATURA -> ControleTemperatura(valorAjuste) {
+                        ajustar(it)
+                        registrarAjuste(it)
+                    }
+                    AjusteDispositivo.INTENSIDADE -> ControlePercentual("Brilho", valorAjuste, 10, ajustar, registrarAjuste)
+                    AjusteDispositivo.ABERTURA_JANELA -> ControlePercentual("Abertura", valorAjuste, 0, ajustar, registrarAjuste)
+                    null -> Unit
+                }
             }
         }
     }
+}
+
+@Composable
+private fun BotaoDispositivo(
+    titulo: String,
+    cor: Color,
+    enabled: Boolean = true,
+    acionar: () -> Unit
+) {
+    Button(
+        onClick = acionar,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 62.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = cor)
+    ) {
+        Text(titulo, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun ControleTemperatura(temperatura: Int, ajustar: (Int) -> Unit) {
+    Text(
+        "Temperatura: ${temperatura} °C",
+        fontSize = 19.sp,
+        fontWeight = FontWeight.Bold,
+        color = TextoEscuro
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(
+            onClick = { ajustar(temperatura - 1) },
+            enabled = temperatura > 16,
+            modifier = Modifier.weight(1f).heightIn(min = 54.dp)
+        ) {
+            Text("− 1 °C", fontSize = 18.sp)
+        }
+        OutlinedButton(
+            onClick = { ajustar(temperatura + 1) },
+            enabled = temperatura < 30,
+            modifier = Modifier.weight(1f).heightIn(min = 54.dp)
+        ) {
+            Text("+ 1 °C", fontSize = 18.sp)
+        }
+    }
+}
+
+@Composable
+private fun ControlePercentual(
+    titulo: String,
+    percentual: Int,
+    minimo: Int,
+    ajustar: (Int) -> Unit,
+    registrarAjuste: (Int) -> Unit
+) {
+    var percentualInicial by remember { mutableStateOf<Int?>(null) }
+    var percentualFinal by remember { mutableIntStateOf(percentual) }
+    Text(
+        "$titulo: $percentual%",
+        fontSize = 19.sp,
+        fontWeight = FontWeight.Bold,
+        color = TextoEscuro
+    )
+    Slider(
+        value = percentual.toFloat(),
+        onValueChange = {
+            if (percentualInicial == null) percentualInicial = percentual
+            percentualFinal = it.roundToInt()
+            ajustar(percentualFinal)
+        },
+        onValueChangeFinished = {
+            val inicial = percentualInicial
+            if (inicial != null && inicial != percentualFinal) registrarAjuste(percentualFinal)
+            percentualInicial = null
+        },
+        valueRange = minimo.toFloat()..100f,
+        steps = (100 - minimo) / 10 - 1,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+    )
 }
 
 // CARTÕES DA CENTRAL DO TUTOR
