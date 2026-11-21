@@ -1,6 +1,12 @@
 # CasaSegura
 
-Projeto individual da disciplina de desenvolvimento Android. O CasaSegura é um protótipo de automação residencial assistiva feito em Kotlin com Jetpack Compose. A ideia é facilitar tarefas da casa com botões grandes, instruções de voz e rotinas com um toque.
+O CasaSegura é um projeto acadêmico de acompanhamento remoto de pessoas idosas. Ele foi pensado para quem tem autonomia para passar parte do dia em casa sem companhia. A pessoa idosa pode usar botões grandes, instruções por voz e lembretes para cuidar da rotina. Enquanto faz compras, trabalha ou resolve outras tarefas, o tutor pode acompanhar pelo próprio celular as atividades registradas no app.
+
+## Como funciona o acompanhamento
+
+Com os dois celulares vinculados, o tutor pode receber avisos sobre ações feitas pela pessoa assistida, como executar uma rotina, alterar um lembrete ou acionar o SOS demonstrativo. Assim, ele consegue acompanhar a rotina à distância e decidir quando entrar em contato.
+
+O protótipo foi feito em Kotlin com Jetpack Compose. Os controles da casa são simulados, e os avisos dependem de conexão e das permissões do Android. O acompanhamento serve como apoio à autonomia e complementa os cuidados presenciais quando eles são necessários.
 
 ## O que dá para fazer no app
 
