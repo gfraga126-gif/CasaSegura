@@ -177,6 +177,7 @@ private suspend fun consultarServidor(endereco: String): String =
         }
     }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CasaSeguraApp() {
     val contexto = LocalContext.current
@@ -540,9 +541,10 @@ fun CasaSeguraApp() {
 
                         Spacer(Modifier.height(12.dp))
 
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
+                            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             RecursoVisual("🔊", "Voz")
                             RecursoVisual("🏡", "Casa")
@@ -1155,8 +1157,7 @@ fun BotaoAcesso(
     Button(
         onClick = aoClicar,
         modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 116.dp),
+            .fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = corFinal
@@ -1166,6 +1167,7 @@ fun BotaoAcesso(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(min = 116.dp)
                 .background(
                     Brush.horizontalGradient(
                         listOf(corInicial, corFinal)
@@ -1208,9 +1210,10 @@ fun RecursoVisual(
     ) {
         Box(
             modifier = Modifier
-                .size(62.dp)
+                .sizeIn(minWidth = 62.dp, minHeight = 62.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(Color.White),
+                .background(Color.White)
+                .padding(8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(icone, fontSize = 28.sp)
@@ -1218,7 +1221,8 @@ fun RecursoVisual(
         Spacer(Modifier.height(6.dp))
         Text(
             nome,
-            fontSize = 13.sp,
+            textAlign = TextAlign.Center,
+            fontSize = 14.sp,
             color = TextoEscuro
         )
     }
