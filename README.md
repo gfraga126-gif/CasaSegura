@@ -10,7 +10,7 @@ O protótipo foi feito em Kotlin com Jetpack Compose e abre direto na escolha en
 
 Nesta versão de entrega, retiramos o login e a senha para que o professor possa instalar o app, escolher um perfil e testar os recursos locais sem criar conta ou configurar um servidor. Isso também reduz as etapas de entrada para a pessoa idosa e para quem cuida dela.
 
-Os lembretes e o histórico ficam no próprio aparelho. Como os avisos entre dois celulares dependiam das contas, esse recurso ficou para uma versão futura. Também pretendemos avaliar o reconhecimento facial no aparelho para proteger o acesso às funções do tutor.
+Os lembretes e o histórico ficam no próprio aparelho. Como os avisos entre dois celulares dependiam das contas, esse recurso ficou para uma versão futura.
 
 ## O que dá para fazer no app
 
@@ -32,7 +32,7 @@ O SOS gera um registro demonstrativo no aparelho. O atalho do SAMU abre o discad
    node server.js
    ```
 
-4. No app, abra **Familiar / Tutor** e toque em **Atualizar conexão**. O emulador consulta `http://10.0.2.2:3000/api/status`. Esse endereço aponta para o computador somente no emulador.
+4. No app, abra **Familiar / Tutor** e toque em **Atualizar conexão**. O emulador consulta `http://10.0.2.2:3000/api/status`. No emulador, esse endereço aponta para o computador que está rodando o servidor.
 
 ## Roteiro de demonstração
 

@@ -45,7 +45,6 @@ import java.net.URL
 import java.util.Locale
 import kotlin.math.roundToInt
 
-// CORES DO APLICATIVO
 private val AzulEscuro = Color(0xFF171936)
 private val Azul = Color(0xFF40369E)
 private val AzulClaro = Color(0xFF5848C2)
@@ -139,7 +138,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// CONSULTA AO SERVIDOR
 private suspend fun consultarServidor(endereco: String): String =
     withContext(Dispatchers.IO) {
         var conexao: HttpURLConnection? = null
@@ -388,7 +386,6 @@ fun CasaSeguraApp() {
         }
     }
 
-    // GOOGLE MAPS
     fun abrirMapa() {
         val lat = latitude
         val lon = longitude
@@ -446,7 +443,6 @@ fun CasaSeguraApp() {
             .background(Fundo)
             .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
-        // CABEÇALHO
         CabecalhoCasaSegura()
 
         when (tela) {
@@ -1046,7 +1042,6 @@ fun CasaSeguraApp() {
     }
 }
 
-// CABEÇALHO MODERNO
 @Composable
 fun CabecalhoCasaSegura() {
     Column(
@@ -1093,7 +1088,6 @@ fun CabecalhoCasaSegura() {
     }
 }
 
-// BOTÕES DA TELA INICIAL
 @Composable
 fun BotaoAcesso(
     icone: String,
@@ -1223,7 +1217,6 @@ private fun ControleGeracaoSolar(simulando: Boolean, alternar: () -> Unit) {
     }
 }
 
-// CONTROLE DOS DISPOSITIVOS
 @Composable
 private fun ControleAcessivel(
     dispositivo: Dispositivo,
@@ -1423,7 +1416,6 @@ fun CartaoInformacao(
     }
 }
 
-// ROLAGEM DAS TELAS
 @Composable
 fun ConteudoRolavel(
     conteudo: @Composable ColumnScope.() -> Unit
