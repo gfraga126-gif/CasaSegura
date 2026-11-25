@@ -42,8 +42,6 @@ app.post("/api/sos", (req, res) => {
     });
 });
 
-require("./notificacoes")(app);
-
 app.use((req, res) => {
     res.status(404).json({
         erro: "Rota nao encontrada"

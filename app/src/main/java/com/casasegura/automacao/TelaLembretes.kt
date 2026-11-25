@@ -145,7 +145,7 @@ internal fun TelaLembretes(registrarAcao: (String) -> Unit) {
                 mensagem = if (agenda.notificar(TipoLembrete.CAFE, teste = true)) {
                     "Notificação de teste enviada."
                 } else {
-                    "Permita as notificações do CasaSegura."
+                    "Permita as notificações do Tutor em Casa."
                 }
             },
             enabled = podeNotificar,

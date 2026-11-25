@@ -29,17 +29,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -182,27 +179,9 @@ private suspend fun consultarServidor(endereco: String): String =
 fun CasaSeguraApp() {
     val contexto = LocalContext.current
     val escopo = rememberCoroutineScope()
-    val acesso = remember(contexto) { AcessoCasa.obter(contexto) }
-    val conta by acesso.sessao.collectAsState()
-    val ciclo = LocalLifecycleOwner.current.lifecycle
-    var modoLocal by rememberSaveable { mutableStateOf(false) }
-    var envioRemoto by remember { mutableStateOf<Job?>(null) }
-
-    LaunchedEffect(ciclo, conta?.token) {
-        if (conta == null) return@LaunchedEffect
-        modoLocal = false
-        acesso.agendarSincronizacao()
-        ciclo.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                acesso.sincronizar()
-                delay(5_000)
-            }
-        }
-    }
-
     var tela by rememberSaveable { mutableStateOf("inicio") }
     var origemLembretes by rememberSaveable { mutableStateOf("morador") }
-    if (conta == null && tela == "vinculo") LaunchedEffect(Unit) { tela = "inicio" }
+    if (tela == "vinculo") LaunchedEffect(Unit) { tela = "inicio" }
     var vozAtivada by remember { mutableStateOf(true) }
     var vozPronta by remember { mutableStateOf(false) }
     var mecanismoVoz by remember {
@@ -221,9 +200,6 @@ fun CasaSeguraApp() {
 
     fun registrarAcao(descricao: String) {
         historico.registrar(descricao)
-        if (acesso.registrar(descricao) && envioRemoto?.isActive != true) {
-            envioRemoto = escopo.launch { acesso.sincronizar() }
-        }
     }
 
     var servidorStatus by remember {
@@ -331,7 +307,7 @@ fun CasaSeguraApp() {
         servidorStatus = "CONSULTANDO..."
 
         escopo.launch {
-            servidorStatus = consultarServidor(conta?.servidor ?: API_URL)
+            servidorStatus = consultarServidor(API_URL)
             consultando = false
         }
     }
@@ -348,7 +324,7 @@ fun CasaSeguraApp() {
         mensagemMapa = ""
 
         if (!temLocalizacaoPrecisa()) {
-            localizacaoTexto = "Autorize a localização precisa do CasaSegura nas permissões do Android."
+            localizacaoTexto = "Autorize a localização precisa do Tutor em Casa nas permissões do Android."
             return
         }
 
@@ -460,7 +436,7 @@ fun CasaSeguraApp() {
         }
     }
 
-    BackHandler(enabled = (conta != null || modoLocal) && tela != "inicio") {
+    BackHandler(enabled = tela != "inicio") {
         voltar()
     }
 
@@ -473,12 +449,7 @@ fun CasaSeguraApp() {
         // CABEÇALHO
         CabecalhoCasaSegura()
 
-        if (conta == null && !modoLocal) {
-            TelaEntradaCasa(acesso) {
-                tela = "inicio"
-                modoLocal = true
-            }
-        } else when (tela) {
+        when (tela) {
             "inicio" -> {
                 Box(Modifier.weight(1f)) {
                     ConteudoRolavel {
@@ -491,17 +462,11 @@ fun CasaSeguraApp() {
                             color = TextoEscuro
                         )
                         Text(
-                            "Escolha como deseja acessar o CasaSegura.",
+                            "Escolha como deseja acessar o app.",
                             fontSize = 16.sp,
                             color = Color.DarkGray,
                             textAlign = TextAlign.Center
                         )
-
-                        TextButton(onClick = {
-                            if (conta == null) modoLocal = false else tela = "vinculo"
-                        }) {
-                            Text(if (conta == null) "Entrar ou cadastrar conta" else "Minha conta e avisos entre celulares")
-                        }
 
                         Spacer(Modifier.height(24.dp))
 
@@ -831,12 +796,6 @@ fun CasaSeguraApp() {
                 }
             }
 
-            "vinculo" -> {
-                conta?.let { atual ->
-                    Box(Modifier.weight(1f)) { TelaVinculoCasa(acesso, atual) }
-                }
-            }
-
             "tutor" -> {
                 Box(Modifier.weight(1f)) {
                     ConteudoRolavel {
@@ -996,23 +955,13 @@ fun CasaSeguraApp() {
 
                         Spacer(Modifier.height(12.dp))
 
-                        if (conta != null) {
-                            OutlinedButton(
-                                onClick = { tela = "vinculo" },
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)
-                            ) {
-                                IconeAcao("🔔", "AVISOS DO OUTRO CELULAR")
-                            }
-                            Spacer(Modifier.height(12.dp))
-                        }
-
                         HistoricoDaCasa(historico.eventos)
                     }
                 }
             }
         }
 
-        if ((conta != null || modoLocal) && tela != "inicio") {
+        if (tela != "inicio") {
             OutlinedButton(
                 onClick = {
                     voltar()
@@ -1121,7 +1070,7 @@ fun CabecalhoCasaSegura() {
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(
-                    "CasaSegura",
+                    stringResource(R.string.app_name),
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -1137,7 +1086,7 @@ fun CabecalhoCasaSegura() {
         Spacer(Modifier.height(10.dp))
 
         Text(
-            "Tecnologia, conforto e segurança",
+            stringResource(R.string.app_tagline),
             color = Color.White,
             fontSize = 13.sp
         )

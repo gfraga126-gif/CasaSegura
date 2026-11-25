@@ -111,7 +111,7 @@ internal class AgendaLembretes(private val contexto: Context) {
     fun notificar(tipo: TipoLembrete, teste: Boolean = false): Boolean =
         enviar(
             if (teste) ID_TESTE else tipo.id,
-            if (teste) "Teste do CasaSegura" else tipo.titulo,
+            if (teste) "Teste do Tutor em Casa" else tipo.titulo,
             if (teste) "As notificações de lembretes estão funcionando." else tipo.mensagem
         )
 

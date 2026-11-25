@@ -1,12 +1,16 @@
-# CasaSegura
+# Tutor em Casa
 
-O CasaSegura é um projeto acadêmico de acompanhamento remoto de pessoas idosas. Ele foi pensado para quem tem autonomia para passar parte do dia em casa sem companhia. A pessoa idosa pode usar botões grandes, instruções por voz e lembretes para cuidar da rotina. Enquanto faz compras, trabalha ou resolve outras tarefas, o tutor pode acompanhar pelo próprio celular as atividades registradas no app.
+*Mais autonomia para a pessoa idosa, mais facilidade para quem cuida.*
 
-## Como funciona o acompanhamento
+O Tutor em Casa é um projeto acadêmico voltado à autonomia de pessoas idosas em casa. Ele reúne botões grandes, instruções por voz, lembretes e rotinas para facilitar tarefas do dia a dia. A Central do Tutor permite consultar, no mesmo aparelho, o histórico das ações registradas no app.
 
-Com os dois celulares vinculados, o tutor pode receber avisos sobre ações feitas pela pessoa assistida, como executar uma rotina, alterar um lembrete ou acionar o SOS demonstrativo. Assim, ele consegue acompanhar a rotina à distância e decidir quando entrar em contato.
+O protótipo foi feito em Kotlin com Jetpack Compose e abre direto na escolha entre **Pessoa Assistida** e **Familiar / Tutor**.
 
-O protótipo foi feito em Kotlin com Jetpack Compose. Os controles da casa são simulados, e os avisos dependem de conexão e das permissões do Android. O acompanhamento serve como apoio à autonomia e complementa os cuidados presenciais quando eles são necessários.
+## Por que retiramos o login e a senha
+
+Nesta versão de entrega, retiramos o login e a senha para que o professor possa instalar o app, escolher um perfil e testar os recursos locais sem criar conta ou configurar um servidor. Isso também reduz as etapas de entrada para a pessoa idosa e para quem cuida dela.
+
+Os lembretes e o histórico ficam no próprio aparelho. Como os avisos entre dois celulares dependiam das contas, esse recurso ficou para uma versão futura. Também pretendemos avaliar o reconhecimento facial no aparelho para proteger o acesso às funções do tutor.
 
 ## O que dá para fazer no app
 
@@ -14,12 +18,12 @@ O protótipo foi feito em Kotlin com Jetpack Compose. Os controles da casa são 
 - **Familiar / Tutor** — consultar a localização do próprio aparelho, conferir a conexão com o servidor e ver os 50 eventos mais recentes no histórico local.
 - **Lembretes da casa** — configurar avisos diários para café, almoço, jantar e remédio. Cada aviso tem horário e chave de ativação próprios.
 
-O SOS gera um registro demonstrativo e, com duas contas vinculadas, envia um aviso de atividade ao outro celular. O atalho do SAMU abre o discador com o 192 e a pessoa decide se faz a chamada. Os controles da casa ainda não estão ligados a um ESP32.
+O SOS gera um registro demonstrativo no aparelho. O atalho do SAMU abre o discador com o 192 e a pessoa decide se faz a chamada. Os controles da casa ainda não estão ligados a um ESP32.
 
 ## Como executar
 
 1. Abra a pasta do projeto no Android Studio e aguarde a sincronização do Gradle. O projeto usa o SDK Android 37.
-2. Selecione um emulador ou celular Android e execute a configuração **app**. Para explorar os recursos sem servidor, toque em **Usar demonstração local**. Para demonstrar a localização, deixe o GPS ligado e conceda a localização precisa.
+2. Selecione um emulador ou celular Android e execute a configuração **app**. Na tela inicial, escolha um dos dois perfis. O servidor é necessário apenas para o teste de conexão pela internet. Para demonstrar a localização, deixe o GPS ligado e conceda a localização precisa.
 3. Para testar a conexão no emulador, inicie o servidor no computador:
 
    ```bash
@@ -51,13 +55,7 @@ Abra **Pessoa Assistida → Lembretes da casa** ou **Familiar / Tutor → Config
 
 Ao ativar um lembrete, o Android mostra uma confirmação com o horário escolhido. O botão **Testar notificação** envia um aviso de demonstração na hora. Os lembretes ativos são salvos no aparelho e reagendados após uma reinicialização. O Android pode atrasar a entrega dos avisos agendados, especialmente em economia de bateria.
 
-## Como vincular dois celulares
+## Melhorias futuras
 
-1. Instale o CasaSegura nos dois aparelhos e informe o mesmo endereço **HTTPS** do servidor nos dois. O endereço padrão `http://10.0.2.2:3000` serve para o emulador acessar o computador.
-2. Toque em **Cadastrar tutor** em um celular e **Cadastrar pessoa assistida** no outro. Crie um usuário e uma senha próprios para cada conta. Ambas podem acessar os dois perfis do app.
-3. Após entrar, abra **Minha conta e avisos entre celulares**. Gere um código em um aparelho e digite-o no outro. O código vale por dez minutos e só pode ser usado uma vez.
-4. Autorize os avisos do Android nos dois aparelhos. Execute uma ação em **Pessoa Assistida**. No outro aparelho, confira a notificação ou abra **Avisos recebidos**.
-
-O app compartilha descrições das ações, como abertura de janela, ajuste da luz, uso de uma rotina, alteração de lembrete ou SOS demonstrativo. Fotos, gravações e coordenadas ficam no aparelho. Com o app aberto, os avisos são consultados a cada cinco segundos. Em segundo plano, o Android agenda a consulta com um intervalo mínimo de 15 minutos e pode atrasá-la conforme a rede e a bateria.
-
-Para servir dois celulares fora do emulador, execute o Node.js em um servidor acessível pelos dois aparelhos, atrás de HTTPS com certificado válido. O processo usa a porta definida em `PORT` ou 3000. Use `CASASEGURA_DATA_FILE` para apontar para um arquivo de dados em um volume persistente e privado do servidor. Esse arquivo guarda as contas e as atividades e deve ficar fora do Git. O servidor demonstrativo foi feito para funcionar em uma única instância.
+- Avaliar o reconhecimento facial no aparelho para proteger o acesso às funções do tutor.
+- Desenvolver o acompanhamento à distância com autorização da pessoa assistida e integração com dispositivos reais.
