@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
@@ -55,6 +56,7 @@ private val TextoEscuro = Color(0xFF24203B)
 
 // Servidor local do computador, acessado pelo emulador
 private const val API_URL = "http://10.0.2.2:3000"
+private const val PERMISSAO_REDE_LOCAL = "android.permission.ACCESS_LOCAL_NETWORK"
 
 private enum class AcaoDispositivo(
     val ativar: String,
@@ -300,7 +302,14 @@ fun CasaSeguraApp() {
         falar(mensagem)
     }
 
+    fun temAcessoRedeLocal() = Build.VERSION.SDK_INT < 37 ||
+        ContextCompat.checkSelfPermission(contexto, PERMISSAO_REDE_LOCAL) == PackageManager.PERMISSION_GRANTED
+
     fun verificarServidor() {
+        if (!temAcessoRedeLocal()) {
+            servidorStatus = "PERMITA O ACESSO À REDE LOCAL"
+            return
+        }
         consultando = true
         servidorStatus = "CONSULTANDO..."
 
@@ -308,6 +317,11 @@ fun CasaSeguraApp() {
             servidorStatus = consultarServidor(API_URL)
             consultando = false
         }
+    }
+
+    val pedirRedeLocal = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedida ->
+        if (concedida) verificarServidor()
+        else servidorStatus = "ACESSO À REDE LOCAL NÃO AUTORIZADO"
     }
 
     // GPS
@@ -830,7 +844,10 @@ fun CasaSeguraApp() {
                                 Spacer(Modifier.height(12.dp))
 
                                 Button(
-                                    onClick = { verificarServidor() },
+                                    onClick = {
+                                        if (temAcessoRedeLocal()) verificarServidor()
+                                        else pedirRedeLocal.launch(PERMISSAO_REDE_LOCAL)
+                                    },
                                     enabled = !consultando,
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(14.dp)

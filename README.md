@@ -32,7 +32,7 @@ O SOS gera um registro demonstrativo no aparelho. O atalho do SAMU abre o discad
    node server.js
    ```
 
-4. No app, abra **Familiar / Tutor** e toque em **Atualizar conexão**. O emulador consulta `http://10.0.2.2:3000/api/status`. No emulador, esse endereço aponta para o computador que está rodando o servidor.
+4. No app, abra **Familiar / Tutor** e toque em **Atualizar conexão**. O emulador consulta `http://10.0.2.2:3000/api/status`. No emulador, esse endereço aponta para o computador que está rodando o servidor. Se o Android 17 pedir acesso à rede local, permita para concluir o teste.
 
 ## Roteiro de demonstração
 
